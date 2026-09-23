@@ -34,7 +34,7 @@ algorithm
     if SHUT then
       state := 8;
       waitStartTime := time;
-    elseif STOP and state <> 0 and state <> 8 then
+    elseif STOP and state <> 0 and state <> 7 and state <> 8 then
       state := 7;
     elseif START and state == 0 then
       state := 1;

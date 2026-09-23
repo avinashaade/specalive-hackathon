@@ -113,7 +113,7 @@ def generate_modelica(system: SystemModel) -> str:
     # STOP has second priority
     # ---------------------------------------------------------
     lines.append(
-        "    elseif STOP and state <> 0 and state <> 8 then"
+        "    elseif STOP and state <> 0 and state <> 7 and state <> 8 then"
     )
     lines.append("      state := 7;")
 
