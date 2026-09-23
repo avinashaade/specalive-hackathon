@@ -23,6 +23,8 @@ model L1_TwoTankController
   input Boolean SHUT(start = false);
 
   discrete Integer state(start = 0, fixed = true);
+  discrete Integer pausedState(start = 0, fixed = true);
+  discrete Real pausedRemainingWait(start = 0.0, fixed = true);
   discrete Real waitStartTime(start = 0.0, fixed = true);
 
 equation
@@ -34,8 +36,30 @@ algorithm
     if SHUT then
       state := 8;
       waitStartTime := time;
+      pausedRemainingWait := 0.0;
     elseif STOP and state <> 0 and state <> 7 and state <> 8 then
+      pausedState := state;
+      if state == 2 then
+        pausedRemainingWait := max(0.0, waitAfterFill - (time - waitStartTime));
+      elseif state == 4 then
+        pausedRemainingWait := max(0.0, waitAfterTransfer - (time - waitStartTime));
+      elseif state == 6 then
+        pausedRemainingWait := max(0.0, waitAfterDrain - (time - waitStartTime));
+      else
+        pausedRemainingWait := 0.0;
+      end if;
       state := 7;
+    elseif START and state == 7 then
+      state := pausedState;
+      if pausedState == 2 then
+        waitStartTime := time + pausedRemainingWait - waitAfterFill;
+      elseif pausedState == 4 then
+        waitStartTime := time + pausedRemainingWait - waitAfterTransfer;
+      elseif pausedState == 6 then
+        waitStartTime := time + pausedRemainingWait - waitAfterDrain;
+      else
+        waitStartTime := time;
+      end if;
     elseif START and state == 0 then
       state := 1;
     elseif state == 1 and tank1Level >= tank1HighLevel then
@@ -43,16 +67,19 @@ algorithm
       waitStartTime := time;
     elseif state == 2 and (time - waitStartTime) >= waitAfterFill then
       state := 3;
+      pausedRemainingWait := 0.0;
     elseif state == 3 and tank1Level <= tank1LowLevel then
       state := 4;
       waitStartTime := time;
     elseif state == 4 and (time - waitStartTime) >= waitAfterTransfer then
       state := 5;
+      pausedRemainingWait := 0.0;
     elseif state == 5 and tank2Level <= tank2LowLevel then
       state := 6;
       waitStartTime := time;
     elseif state == 6 and (time - waitStartTime) >= waitAfterDrain then
       state := 1;
+      pausedRemainingWait := 0.0;
     end if;
   end when;
 

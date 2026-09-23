@@ -67,8 +67,14 @@ def generate_modelica(system: SystemModel) -> str:
     # 8 = SHUTDOWN
     # ---------------------------------------------------------
     lines.append("  discrete Integer state(start = 0, fixed = true);")
+    lines.append("  discrete Integer pausedState(start = 0, fixed = true);")
 
-    # Time at which the current WAIT state was entered.
+    # Remaining time when STOP interrupts a WAIT state.
+    lines.append(
+        "  discrete Real pausedRemainingWait(start = 0.0, fixed = true);"
+    )
+
+    # Time at which the current WAIT state was entered/resumed.
     lines.append(
         "  discrete Real waitStartTime(start = 0.0, fixed = true);"
     )
@@ -108,18 +114,93 @@ def generate_modelica(system: SystemModel) -> str:
     lines.append("    if SHUT then")
     lines.append("      state := 8;")
     lines.append("      waitStartTime := time;")
+    lines.append("      pausedRemainingWait := 0.0;")
 
     # ---------------------------------------------------------
     # STOP has second priority
+    #
+    # If STOP interrupts a WAIT state, preserve the remaining
+    # wait time so START can resume from the same point.
     # ---------------------------------------------------------
     lines.append(
         "    elseif STOP and state <> 0 and state <> 7 and state <> 8 then"
     )
+    lines.append("      pausedState := state;")
+
+    lines.append(
+        "      if state == 2 then"
+    )
+    lines.append(
+        "        pausedRemainingWait := max(0.0, "
+        "waitAfterFill - (time - waitStartTime));"
+    )
+    lines.append(
+        "      elseif state == 4 then"
+    )
+    lines.append(
+        "        pausedRemainingWait := max(0.0, "
+        "waitAfterTransfer - (time - waitStartTime));"
+    )
+    lines.append(
+        "      elseif state == 6 then"
+    )
+    lines.append(
+        "        pausedRemainingWait := max(0.0, "
+        "waitAfterDrain - (time - waitStartTime));"
+    )
+    lines.append(
+        "      else"
+    )
+    lines.append(
+        "        pausedRemainingWait := 0.0;"
+    )
+    lines.append(
+        "      end if;"
+    )
+
     lines.append("      state := 7;")
 
     # ---------------------------------------------------------
-    # START from IDLE
+    # START
+    #
+    # If paused, resume the state that was active before STOP.
+    # For WAIT states, reconstruct waitStartTime so that only
+    # the remaining wait duration is required.
+    # Otherwise START from IDLE begins the normal sequence.
     # ---------------------------------------------------------
+    lines.append(
+        "    elseif START and state == 7 then"
+    )
+    lines.append("      state := pausedState;")
+
+    lines.append(
+        "      if pausedState == 2 then"
+    )
+    lines.append(
+        "        waitStartTime := time + pausedRemainingWait - waitAfterFill;"
+    )
+    lines.append(
+        "      elseif pausedState == 4 then"
+    )
+    lines.append(
+        "        waitStartTime := time + pausedRemainingWait - waitAfterTransfer;"
+    )
+    lines.append(
+        "      elseif pausedState == 6 then"
+    )
+    lines.append(
+        "        waitStartTime := time + pausedRemainingWait - waitAfterDrain;"
+    )
+    lines.append(
+        "      else"
+    )
+    lines.append(
+        "        waitStartTime := time;"
+    )
+    lines.append(
+        "      end if;"
+    )
+
     lines.append(
         "    elseif START and state == 0 then"
     )
@@ -136,14 +217,13 @@ def generate_modelica(system: SystemModel) -> str:
 
     # ---------------------------------------------------------
     # WAIT_AFTER_FILL
-    #
-    # Remain in this state for 10 seconds.
     # ---------------------------------------------------------
     lines.append(
         "    elseif state == 2 and "
         "(time - waitStartTime) >= waitAfterFill then"
     )
     lines.append("      state := 3;")
+    lines.append("      pausedRemainingWait := 0.0;")
 
     # ---------------------------------------------------------
     # TRANSFER_T1_T2
@@ -156,14 +236,13 @@ def generate_modelica(system: SystemModel) -> str:
 
     # ---------------------------------------------------------
     # WAIT_AFTER_TRANSFER
-    #
-    # Remain in this state for 12 seconds.
     # ---------------------------------------------------------
     lines.append(
         "    elseif state == 4 and "
         "(time - waitStartTime) >= waitAfterTransfer then"
     )
     lines.append("      state := 5;")
+    lines.append("      pausedRemainingWait := 0.0;")
 
     # ---------------------------------------------------------
     # DRAIN_T2
@@ -176,14 +255,13 @@ def generate_modelica(system: SystemModel) -> str:
 
     # ---------------------------------------------------------
     # WAIT_AFTER_DRAIN
-    #
-    # Remain in this state for 8 seconds.
     # ---------------------------------------------------------
     lines.append(
         "    elseif state == 6 and "
         "(time - waitStartTime) >= waitAfterDrain then"
     )
     lines.append("      state := 1;")
+    lines.append("      pausedRemainingWait := 0.0;")
 
     lines.append("    end if;")
     lines.append("  end when;")
