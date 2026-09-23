@@ -8,7 +8,7 @@ def _safe_name(name: str) -> str:
 
 def generate_modelica(system: SystemModel) -> str:
     """
-    Generate a basic executable Modelica model from SystemModel.
+    Generate a Modelica representation from the SystemModel.
 
     The SystemModel remains the single source of truth.
     """
@@ -19,6 +19,10 @@ def generate_modelica(system: SystemModel) -> str:
 
     lines.append(f"model {model_name}")
     lines.append("")
+
+    # ========================================
+    # Parameters
+    # ========================================
 
     lines.append("  // ========================================")
     lines.append("  // Two-Tank System Parameters")
@@ -38,7 +42,15 @@ def generate_modelica(system: SystemModel) -> str:
     lines.append("  parameter Real flowV2 = 0.0045;")
     lines.append("  parameter Real flowV3 = 0.005;")
 
+    lines.append("  parameter Real waitAfterFill = 10.0;")
+    lines.append("  parameter Real waitAfterTransfer = 12.0;")
+    lines.append("  parameter Real waitAfterDrain = 8.0;")
+
     lines.append("")
+
+    # ========================================
+    # Tank levels
+    # ========================================
 
     lines.append("  // ========================================")
     lines.append("  // Tank levels")
@@ -54,6 +66,24 @@ def generate_modelica(system: SystemModel) -> str:
 
     lines.append("")
 
+    # ========================================
+    # Controller command inputs
+    # ========================================
+
+    lines.append("  // ========================================")
+    lines.append("  // Controller command inputs")
+    lines.append("  // ========================================")
+
+    lines.append("  input Boolean START(start=false);")
+    lines.append("  input Boolean STOP(start=false);")
+    lines.append("  input Boolean SHUT(start=false);")
+
+    lines.append("")
+
+    # ========================================
+    # Valve commands
+    # ========================================
+
     lines.append("  // ========================================")
     lines.append("  // Valve commands")
     lines.append("  // ========================================")
@@ -64,13 +94,15 @@ def generate_modelica(system: SystemModel) -> str:
 
     lines.append("")
 
+    # ========================================
+    # Controller state
+    # ========================================
+
     lines.append("  // ========================================")
     lines.append("  // Controller state")
     lines.append("  // ========================================")
 
-    lines.append(
-        "  discrete Integer state(start=0, fixed=true);"
-    )
+    lines.append("  discrete Integer state(start=0, fixed=true);")
 
     lines.append("")
 
@@ -87,7 +119,10 @@ def generate_modelica(system: SystemModel) -> str:
 
     lines.append("")
 
-    # Modelica equations start here.
+    # ========================================
+    # Continuous equations
+    # ========================================
+
     lines.append("equation")
     lines.append("")
 
@@ -119,60 +154,79 @@ def generate_modelica(system: SystemModel) -> str:
 
     lines.append("")
 
-    lines.append("  // ========================================")
-    lines.append("  // State transitions")
-    lines.append("  // ========================================")
+    # ========================================
+    # State machine
+    # ========================================
 
     lines.append("algorithm")
+    lines.append("")
+
+    lines.append("  // Command priority: SHUT > STOP > START")
 
     lines.append("  when initial() then")
-    lines.append("    state := 1;")
+    lines.append("    state := 0;")
     lines.append("  end when;")
 
+    # Check controller conditions periodically.
+    lines.append("  when sample(0, 0.1) then")
+
     lines.append("")
+
+    # SHUT has highest priority.
+    lines.append("    if SHUT then")
+    lines.append("      state := 8;")
+
+    # STOP has second priority.
+    lines.append(
+        "    elseif STOP and state <> 0 and state <> 8 then"
+    )
+    lines.append("      state := 7;")
+
+    # START from IDLE.
+    lines.append(
+        "    elseif START and state == 0 then"
+    )
+    lines.append("      state := 1;")
+
+    # Normal sequence.
+    lines.append(
+        "    elseif state == 1 and tank1Level >= tank1HighLevel then"
+    )
+    lines.append("      state := 2;")
 
     lines.append(
-        "  when state == 1 and tank1Level >= tank1HighLevel then"
+        "    elseif state == 2 then"
     )
-    lines.append("    state := 2;")
-    lines.append("  end when;")
-
-    lines.append("")
-
-    lines.append("  when state == 2 then")
-    lines.append("    state := 3;")
-    lines.append("  end when;")
-
-    lines.append("")
+    lines.append(
+        "      state := 3;"
+    )
 
     lines.append(
-        "  when state == 3 and tank1Level <= tank1LowLevel then"
+        "    elseif state == 3 and tank1Level <= tank1LowLevel then"
     )
-    lines.append("    state := 4;")
-    lines.append("  end when;")
-
-    lines.append("")
-
-    lines.append("  when state == 4 then")
-    lines.append("    state := 5;")
-    lines.append("  end when;")
-
-    lines.append("")
+    lines.append("      state := 4;")
 
     lines.append(
-        "  when state == 5 and tank2Level <= tank2LowLevel then"
+        "    elseif state == 4 then"
     )
-    lines.append("    state := 6;")
-    lines.append("  end when;")
+    lines.append("      state := 5;")
 
+    lines.append(
+        "    elseif state == 5 and tank2Level <= tank2LowLevel then"
+    )
+    lines.append("      state := 6;")
+
+    lines.append(
+        "    elseif state == 6 then"
+    )
+    lines.append("      state := 1;")
+
+    lines.append("    end if;")
     lines.append("")
 
-    lines.append("  when state == 6 then")
-    lines.append("    state := 1;")
     lines.append("  end when;")
-
     lines.append("")
 
-    lines.append("end " + model_name + ";")
+    lines.append(f"end {model_name};")
 
     return "\n".join(lines)

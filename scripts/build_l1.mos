@@ -1,0 +1,7 @@
+loadFile("generated/modelica/L1_TwoTankController.mo");
+
+print("\n=== BUILD RESULT ===\n");
+
+buildModel(L1_TwoTankController);
+
+print("\n=== END BUILD ===\n");

@@ -1,0 +1,2 @@
+loadFile("generated/modelica/L1_TwoTankController.mo");
+checkModel(L1_TwoTankController);

@@ -1,0 +1,8 @@
+loadFile("scripts/test_simulation.mo");
+
+simulate(
+    TestSimulation,
+    startTime=0,
+    stopTime=10,
+    outputFormat="csv"
+);

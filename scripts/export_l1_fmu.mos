@@ -1,0 +1,7 @@
+loadFile("generated/modelica/L1_TwoTankController.mo");
+
+buildModelFMU(
+    L1_TwoTankController,
+    version="2.0",
+    fmuType="cs"
+);

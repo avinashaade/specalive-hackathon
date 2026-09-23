@@ -1,0 +1,9 @@
+loadFile("generated/modelica/L1_TwoTankController.mo");
+
+simulate(
+    L1_TwoTankController,
+    startTime=0,
+    stopTime=100,
+    outputFormat="csv",
+    simflags="-lv=LOG_STDOUT"
+);

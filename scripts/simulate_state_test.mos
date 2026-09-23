@@ -1,0 +1,8 @@
+loadFile("scripts/l1_state_test.mo");
+
+simulate(
+    L1_StateTest,
+    startTime=0,
+    stopTime=20,
+    outputFormat="csv"
+);
