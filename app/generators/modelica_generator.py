@@ -28,6 +28,8 @@ def generate_modelica(system: SystemModel) -> str:
     lines.append("  parameter Real waitAfterTransfer = 12.0;")
     lines.append("  parameter Real waitAfterDrain = 8.0;")
 
+    lines.append("  parameter Real scanTime = 0.1;")
+
     lines.append("")
 
     # ---------------------------------------------------------
@@ -66,16 +68,17 @@ def generate_modelica(system: SystemModel) -> str:
     # ---------------------------------------------------------
     lines.append("  discrete Integer state(start = 0, fixed = true);")
 
+    # Time at which the current WAIT state was entered.
+    lines.append(
+        "  discrete Real waitStartTime(start = 0.0, fixed = true);"
+    )
+
     lines.append("")
 
     # ---------------------------------------------------------
     # Tank physics
     #
-    # Use state directly instead of Boolean valve aliases.
-    # This avoids the purely discrete algebraic loop that
-    # OpenModelica detected with:
-    #
-    # state -> v1Open -> condition -> state
+    # State directly determines the active flow path.
     # ---------------------------------------------------------
     lines.append("equation")
 
@@ -97,54 +100,89 @@ def generate_modelica(system: SystemModel) -> str:
     # Controller state machine
     # ---------------------------------------------------------
     lines.append("algorithm")
-    lines.append("  when sample(0.0, 0.1) then")
+    lines.append("  when sample(0.0, scanTime) then")
 
+    # ---------------------------------------------------------
     # SHUT has highest priority
+    # ---------------------------------------------------------
     lines.append("    if SHUT then")
     lines.append("      state := 8;")
+    lines.append("      waitStartTime := time;")
 
+    # ---------------------------------------------------------
     # STOP has second priority
+    # ---------------------------------------------------------
     lines.append(
         "    elseif STOP and state <> 0 and state <> 8 then"
     )
     lines.append("      state := 7;")
 
+    # ---------------------------------------------------------
     # START from IDLE
+    # ---------------------------------------------------------
     lines.append(
         "    elseif START and state == 0 then"
     )
     lines.append("      state := 1;")
 
-    # Fill Tank 1
+    # ---------------------------------------------------------
+    # FILL_T1
+    # ---------------------------------------------------------
     lines.append(
         "    elseif state == 1 and tank1Level >= tank1HighLevel then"
     )
     lines.append("      state := 2;")
+    lines.append("      waitStartTime := time;")
 
-    # Wait after Tank 1 fill
+    # ---------------------------------------------------------
+    # WAIT_AFTER_FILL
     #
-    # Timing implementation will be added later.
-    lines.append("    elseif state == 2 then")
+    # Remain in this state for 10 seconds.
+    # ---------------------------------------------------------
+    lines.append(
+        "    elseif state == 2 and "
+        "(time - waitStartTime) >= waitAfterFill then"
+    )
     lines.append("      state := 3;")
 
-    # Transfer Tank 1 -> Tank 2
+    # ---------------------------------------------------------
+    # TRANSFER_T1_T2
+    # ---------------------------------------------------------
     lines.append(
         "    elseif state == 3 and tank1Level <= tank1LowLevel then"
     )
     lines.append("      state := 4;")
+    lines.append("      waitStartTime := time;")
 
-    # Wait after transfer
-    lines.append("    elseif state == 4 then")
+    # ---------------------------------------------------------
+    # WAIT_AFTER_TRANSFER
+    #
+    # Remain in this state for 12 seconds.
+    # ---------------------------------------------------------
+    lines.append(
+        "    elseif state == 4 and "
+        "(time - waitStartTime) >= waitAfterTransfer then"
+    )
     lines.append("      state := 5;")
 
-    # Drain Tank 2
+    # ---------------------------------------------------------
+    # DRAIN_T2
+    # ---------------------------------------------------------
     lines.append(
         "    elseif state == 5 and tank2Level <= tank2LowLevel then"
     )
     lines.append("      state := 6;")
+    lines.append("      waitStartTime := time;")
 
-    # Wait after drain
-    lines.append("    elseif state == 6 then")
+    # ---------------------------------------------------------
+    # WAIT_AFTER_DRAIN
+    #
+    # Remain in this state for 8 seconds.
+    # ---------------------------------------------------------
+    lines.append(
+        "    elseif state == 6 and "
+        "(time - waitStartTime) >= waitAfterDrain then"
+    )
     lines.append("      state := 1;")
 
     lines.append("    end if;")
